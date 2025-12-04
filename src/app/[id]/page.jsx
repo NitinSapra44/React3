@@ -1,7 +1,8 @@
 "use client";
-import axios from "axios";
+import React from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import CarouselSize from "./components/propertyCard";
+import axios from "axios";
 
 const DEFAULT_ASSET_BASE = "https://cdn.raveum.com";
 
@@ -13,7 +14,7 @@ const getAssetBase = () => {
 
 function normalizeProperty(raw) {
   const ASSET_BASE = getAssetBase();
-
+  
   const toNumber = (val) => {
     if (val === null || val === undefined) return null;
     if (typeof val === "number") return val;
@@ -28,11 +29,9 @@ function normalizeProperty(raw) {
 
   const fixThumbnail = (path) => {
     if (!path) return `${ASSET_BASE}/placeholder.png`;
-
     const cleaned = cleanString(path);
     if (/^https?:\/\//i.test(cleaned)) return cleaned;
     if (/^\/\//.test(cleaned)) return `https:${cleaned}`;
-
     const stripped = cleaned.replace(/^public\//i, "").replace(/^\/+/, "");
     return `${ASSET_BASE}/${stripped}`;
   };
@@ -53,8 +52,12 @@ function normalizeProperty(raw) {
   };
 }
 
-export default function Home() {
-  const { data, isLoading, isError, error, refetch } = useQuery({
+export default function PropertyDetailPage() {
+  const params = useParams();
+  const router = useRouter();
+  const propertyId = params.id;
+
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["properties"],
     queryFn: async () => {
       const res = await axios.post("https://apis.raveum.com/v1/properties", {
@@ -62,32 +65,34 @@ export default function Home() {
       });
       return res.data;
     },
-    enabled: false,
+    staleTime: 5 * 60 * 1000,
   });
 
   const rawProperties = Array.isArray(data)
     ? data[0]?.properties || []
     : data?.properties || [];
-
-  // Normalize all properties
+  
   const properties = rawProperties.map(normalizeProperty);
+  const property = properties.find((p) => p._id === propertyId);
+
+  if (isLoading) return <div>Loading...</div>;
+  if (isError) return <div>Error: {error.message}</div>;
+  if (!property) return <div>Property not found</div>;
 
   return (
-    <div className="text-3xl font-bold underline">
-      <button
-        onClick={() => refetch()}
-        className="px-4 py-2 bg-blue-500 text-white rounded"
-      >
-        Find Properties
-      </button>
-
-      <div className="mt-4">
-        {isLoading && <p>Loading...</p>}
-        {isError && <p className="text-red-500">Error: {error.message}</p>}
-      </div>
-
-      <div className="p-10">
-        <CarouselSize properties={properties} />
+    <div>
+      <button onClick={() => router.push("/")}>← Back</button>
+      
+      <h1>{property.name}</h1>
+      <p>{property.address}</p>
+      
+      <div>
+        <p>Price: ${property.propertyPrice?.toLocaleString()}</p>
+        <p>Share Price: ${property.sharePrice}</p>
+        <p>Rental Yield: {property.rentalYeild}%</p>
+        <p>Cap Rate: {property.capRatePercentage}%</p>
+        <p>Built-up Area: {property.builtUpArea} sq ft</p>
+        <p>Year Built: {property.builtYear}</p>
       </div>
     </div>
   );
